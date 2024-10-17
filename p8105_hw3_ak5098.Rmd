@@ -9,12 +9,34 @@ library(tidyverse)
 library(dplyr)
 library(readr)
 ```
-#PROBLEM 1
+#PROBLEM 1 - commented out because data kept making RStudio crash
 ```{r}
+#install.packages("devtools")
+#devtools::install_github("p8105/p8105.datasets")
+#library(p8105.datasets)
+#data("ny_noaa")
 
-library(p8105.datasets)
-data("ny_noaa")
+#tidying
+#ny_noaa_tidy = ny_noaa %>% separate(date, into = c("Year", "Month", "Day"), sep = "-") %>% 
+  #drop_na() %>% mutate(
+    #tmax = as.numeric(tmax),
+    #tmin = as.numeric(tmin)) 
 
+
+
+```
+#COMMENT
+#This data set has 9 columns describing the date, precipitations, snowfall, and temperature. There are over 1.2 million rows, each of which is an instance of snow. There is a lot of missing data in tmax and tmin variables. 
+
+
+```{r}
+#ny_noaa_tidy %>% 
+  #group_by(id, Year, Month) %>% 
+  #filter(Month %in% c(1,7)) %>% 
+  #summarize(mean_tmax = mean(tmax, na.rm = TRUE, color = id)) %>% 
+  #ggplot(aes(x = Year, y = mean_tmax, group = id)) + geom_point() + geom_path() +
+  #facet_wrap(~Month) +
+  #labs(title = "Mean monthly temp for each station by year for January and July")
 
 
 ```
