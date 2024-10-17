@@ -5,9 +5,184 @@ date: "2024-10-09"
 ---
 
 ```{r}
+library(tidyverse)
+library(dplyr)
+library(readr)
+```
+#PROBLEM 1
+```{r}
 
+library(p8105.datasets)
+data("ny_noaa")
 
 
 
 ```
 
+#PROBLEM 2
+```{r}
+covar = read_csv(file = "nhanes_covar.csv") |> janitor::clean_names()
+accel = read_csv(file = "nhanes_accel.csv") |> janitor::clean_names()
+
+#tidying covar
+covar_tidy = covar %>%
+  drop_na() %>%
+  rename(seqn = x1, sex = x1_male, age = x3, BMI = x4, education = x1_less_than_high_school) %>%
+  slice(-1) %>%
+  mutate(sex = as.numeric(sex)) %>%
+  mutate(sex = case_match(sex, 1 ~ "male", 2 ~ "female"), sex = as.factor(sex)) %>% 
+  mutate(education=as.numeric(education)) %>% 
+  mutate(education=case_match(education, 1~"less than high school", 2~"high school equivalent", 3~"more than high school"))
+
+#tidying accel
+accel_tidy = accel %>% 
+  drop_na() %>%
+  #pivot_longer(cols = starts_with("min"), names_to = "minute") %>% 
+  mutate_all(as.character) 
+
+
+#merging covar and accel
+covar_accel_merged = inner_join(covar_tidy, accel_tidy, by = "seqn") %>% 
+  filter(age>=21)
+
+#making a nice table for men and women in each education category
+education_sex = covar_accel_merged %>% group_by(education, sex) %>% count() %>% arrange(education)
+knitr::kable(education_sex, format="html", align="c")
+
+
+#visualization of age distribution for men and women in each education category
+covar_accel_merged <- covar_accel_merged %>%
+  mutate(sex = as.factor(sex),
+         education = as.factor(education),
+         age = as.numeric(age))
+
+ggplot(covar_accel_merged, aes(x = sex, y = age)) + 
+  geom_boxplot() + 
+  facet_wrap(~education)
+
+```
+##Comment on table and boxplot:
+#Table - the greatest difference in number of females vs males exists in those who have education level equivalent to high school, where there are 12 more males than females. The category with the greatest number of people is those who have more than a high school education. Those who have an education of less than high school or high school equivalent have a similar number of people and a similar ratio of males:females. 
+#Boxplot - For high school equivalent, both male and female distributions are skewed right. Less than high school is also skewed right, and more than high school is skewed significantly to the left. Median age is lowest for those who have more than a high school education. Difference in medians between female and male is greatest for those who only have a high school equivalent education. 
+
+```{r}
+#total activity for each participant
+
+covar_accel_pivot = covar_accel_merged %>% 
+  pivot_longer(min1:min1440,
+               names_to = "time",
+               names_prefix = "min",
+               values_to = "MIM") %>% 
+  group_by(sex) %>% 
+  mutate(MIM = as.numeric(MIM),
+         time = as.numeric(time)) %>% 
+  mutate(mean_MIM = mean(MIM, na.rm = TRUE),
+         centered_MIM = MIM - mean_MIM) %>% 
+  ungroup()
+
+covar_accel_activity <- covar_accel_pivot %>%
+  group_by(seqn) %>%
+  summarize(total_activity = sum(MIM, na.rm = TRUE)) %>%  
+  left_join(covar_accel_merged, by = "seqn")
+
+covar_accel_activity <- covar_accel_activity %>%
+  mutate(age = as.numeric(age), total_activity = as.numeric(total_activity))
+
+covar_accel_activity %>% 
+  ggplot(aes(x = age, y = total_activity)) +
+  geom_point(aes(color = sex), alpha = 0.3, size = 1) + 
+  facet_wrap(. ~ education) +
+  geom_smooth(se = FALSE) + 
+  labs(x = "Age", y = "Total Activity") 
+```
+#COMMENT: 
+#In each category of education, young people (below 50) have more activity than older folks (above 50). This is denoted by each trend line decreasing over time. Young folks below 30 who have less than high school education have the highest level of activity.
+
+```{r}
+#plot for 24-hour activity time courses for each education level and use color to indicate sex
+covar_accel_pivot %>% 
+  ggplot(aes(x = time, y = centered_MIM)) +
+  geom_point(aes(color = sex), alpha = .05, size = .5) +
+  facet_wrap(.~education) +
+  scale_x_continuous(breaks = c(0, 480, 960, 1440)) +
+  geom_smooth(aes(color=sex),se = FALSE) +
+  labs(x = "Time (minutes)", y = "Centered MIM", color = "Sex")
+```
+#COMMENT
+#The trend lines for male and female are very similar. For those who have "more than high school" education, the max Centered MIM is higher than those who have only less than high school or high school equivalent.
+
+
+#PROBLEM 3
+```{r}
+jan2020 = read_csv("citibike/Jan 2020 Citi.csv") 
+jul2020 = read_csv("citibike/July 2020 Citi.csv")
+jan2024 = read_csv("citibike/Jan 2024 Citi.csv")
+jul2024 = read_csv("citibike/July 2024 Citi.csv")
+
+jan2020 = mutate(jan2020, month_year = "January 2020")
+jul2020 = mutate(jul2020, month_year = "July 2020")
+jan2024 = mutate(jan2024, month_year = "January 2024")
+jul2024 = mutate(jul2024, month_year = "July 2024")
+
+citibike_df = bind_rows(jan2020, jul2020, jan2024, jul2024, .id="ride_id")
+
+#tidying
+citibike_df %>% 
+  drop_na() 
+
+tail(citibike_df)
+```
+#COMMENT
+#The data set contains data on 99,845 rides. Information on each ride includes ID, the type of bike/rideable, the day of the week of the ride, the duration of the ride in minutes, the start point, end point, whether the ride was completed by a member, and the month/year.
+
+```{r}
+#total number of rides in each combination of year and month separating casual riders and Citi Bike members
+member_rides = citibike_df %>% group_by(member_casual, month_year) %>% count() %>% arrange(member_casual)
+knitr::kable(member_rides, format="html", col.names=c("Member or Casual?", "Month & Year", "Number of Rides"), align="c")
+```
+
+#COMMENT
+#The number of rides (for both members and non-members) was lowest in January 2020. Citibike usage clearly increased for both members and non-members after 2020, because the number of rides increased across the board in 2024. In both 2020 and 2024, there are more rides in July than January. There are more member riders than casual riders. The greatest number of rides is in July 2024, with over 36,000 rides.
+
+```{r}
+#5 most popular starting stations for July 2024
+top5 = citibike_df %>% filter(month_year=="July 2024") %>% group_by(start_station_name) %>% count() %>% arrange(desc(n)) %>% head(5)
+
+knitr::kable(top5, col.names = c("Start Station", "Number of Rides"))
+
+```
+#COMMENT 
+#Pier 61 at Chelsea Piers has the highest number of rides (163). Another popular station is University Pl & E 14th Street., however most popular rides start on the West side rather than the East. Another popular station is University Pl & E 14th Street.
+
+```{r}
+#plot to investigate the effects of day of the week, month, and year on median ride duration
+citibike_plot = citibike_df %>% separate(month_year, into = c("Month", "Year"), sep = " ")
+
+median_ride = citibike_plot %>% group_by(Month, Year, weekdays) %>% summarize(median = median(duration, na.rm = TRUE)) %>% ungroup()
+
+median_ride %>% 
+  mutate(weekdays = factor(weekdays, 
+                           levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))) %>%
+  ggplot(aes(x=weekdays, y=median, color=Month)) +
+  geom_point() +
+  facet_wrap(~Year) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+
+```
+#COMMENT
+#The plot shows that median ride duration in January is always less than median ride duration in July. Median ride duration is at its highest on Saturday and Sunday in both years, although 2020 has much higher median ride durations in every month and weekday than 2024.
+
+```{r}
+#figure that shows the impact of month, membership status, and bike type on the distribution of ride duration
+citibike2024 = citibike_plot %>% filter(Year=="2024")
+
+citibike2024 %>% 
+  ggplot(aes(x = member_casual, y=duration, color=rideable_type)) +
+  geom_violin() + 
+  facet_wrap(~Month)
+
+
+```
+#COMMENT
+#Classic bikes are used for longer amounts of time in January, and electric bikes are used for longer amounts of time in July. Members generally ride for longer than casual users. Members are likely to go for short rides, and go for short rides more often than casual users (based on the median and 25-75th percentiles represented in this plot).
